@@ -5,5 +5,7 @@ cd "$(dirname "$0")"
 export ANDROID_HOME=${ANDROID_HOME:-/opt/android-sdk}
 export ANDROID_SDK_ROOT=$ANDROID_HOME
 ./gradlew :netlock:assembleRelease --no-daemon --offline
-cp netlock/build/outputs/apk/release/netlock-release.apk apk/jingxuan-netlock-2.7.2.apk
-echo "APK: $(pwd)/apk/jingxuan-netlock-2.7.2.apk"
+version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' netlock/build.gradle.kts | head -1)
+out="apk/jingxuan-netlock-${version}.apk"
+cp netlock/build/outputs/apk/release/netlock-release.apk "$out"
+echo "APK: $(pwd)/$out"

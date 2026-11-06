@@ -2,6 +2,7 @@ package com.jingxuan.netlock;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -36,6 +37,9 @@ public class MainActivity extends Activity {
     private static final String TARGET_PKG = "com.phoenix.read";
     private static final int REQ_VPN = 1;
     private static final int REQ_NOTIFY = 2;
+    private static final int REQ_PICK_BG_ON = 11;
+    private static final int REQ_PICK_BG_OFF = 12;
+    private static final int REQ_PICK_LOGO = 13;
 
     private ImageView background;
     private TextView status;
@@ -120,7 +124,7 @@ public class MainActivity extends Activity {
 
         background = new ImageView(this);
         background.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        bgOn = decodeBg(R.drawable.bg_on);
+        bgOn = decodeBg(R.drawable.bg_on, CustomImages.BG_ON);
         background.setImageBitmap(bgOn);
         root.addView(background, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -152,14 +156,19 @@ public class MainActivity extends Activity {
         links.addView(netLink);
 
         TextView exitLink = link("退出常驻");
-        exitLink.setPadding(dp(28), 0, 0, 0);
+        exitLink.setPadding(dp(22), 0, 0, 0);
         exitLink.setOnClickListener(v -> exitResident());
         links.addView(exitLink);
 
         TextView ballLink = link("悬浮球");
-        ballLink.setPadding(dp(28), 0, 0, 0);
+        ballLink.setPadding(dp(22), 0, 0, 0);
         ballLink.setOnClickListener(v -> openFloatingBall());
         links.addView(ballLink);
+
+        TextView imageLink = link("图片");
+        imageLink.setPadding(dp(22), 0, 0, 0);
+        imageLink.setOnClickListener(v -> showImageMenu());
+        links.addView(imageLink);
 
         bottom.addView(links, wrap());
 
@@ -182,11 +191,90 @@ public class MainActivity extends Activity {
         return tv;
     }
 
-    private Bitmap decodeBg(int res) {
+    private Bitmap decodeBg(int res, int kind) {
+        // 优先用用户自己上传的图，没有才用内置图
+        Bitmap custom = CustomImages.loadBackground(this, kind,
+                getResources().getDisplayMetrics().widthPixels);
+        if (custom != null) return custom;
         BitmapFactory.Options o = new BitmapFactory.Options();
         o.inPreferredConfig = Bitmap.Config.RGB_565;
         o.inScaled = false;
         return BitmapFactory.decodeResource(getResources(), res, o);
+    }
+
+    /** 图片自定义入口：联网背景 / 断网背景 / 悬浮球头像 */
+    private void showImageMenu() {
+        String[] items = {"更换联网背景", "更换断网背景", "更换悬浮球头像", "恢复默认图片"};
+        new AlertDialog.Builder(this)
+                .setTitle("自定义图片")
+                .setItems(items, (dialog, which) -> {
+                    if (which == 0) pickImage(REQ_PICK_BG_ON);
+                    else if (which == 1) pickImage(REQ_PICK_BG_OFF);
+                    else if (which == 2) pickImage(REQ_PICK_LOGO);
+                    else resetImages();
+                })
+                .show();
+    }
+
+    /** 走系统文件选择器（SAF），不需要存储权限 */
+    private void pickImage(int request) {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                .addCategory(Intent.CATEGORY_OPENABLE)
+                .setType("image/*");
+        try {
+            startActivityForResult(i, request);
+        } catch (Exception e) {
+            try {
+                startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("image/*"), request);
+            } catch (Exception ignored) {
+                Toast.makeText(this, "没找到可用的相册或文件管理器", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    /** 解码 + 压缩较大，放到子线程做，避免大图卡住界面 */
+    private void importImage(Uri uri, int kind) {
+        int width = kind == CustomImages.LOGO
+                ? dp(120)
+                : getResources().getDisplayMetrics().widthPixels;
+        Toast.makeText(this, "正在处理图片…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            boolean ok = CustomImages.importFrom(getApplicationContext(), uri, kind, width);
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed()) return;
+                if (!ok) {
+                    Toast.makeText(this, "这张图读不出来，换一张试试", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                reloadImages();
+                Toast.makeText(this, kind == CustomImages.BG_ON ? "联网背景已替换"
+                        : kind == CustomImages.BG_OFF ? "断网背景已替换"
+                        : "悬浮球头像已替换", Toast.LENGTH_SHORT).show();
+            });
+        }, "netlock-image").start();
+    }
+
+    private void resetImages() {
+        CustomImages.clear(this, CustomImages.BG_ON);
+        CustomImages.clear(this, CustomImages.BG_OFF);
+        CustomImages.clear(this, CustomImages.LOGO);
+        reloadImages();
+        Toast.makeText(this, "已恢复默认图片", Toast.LENGTH_SHORT).show();
+    }
+
+    /** 换图后重建内存里的位图，并让常驻服务里的悬浮球同步换头像 */
+    private void reloadImages() {
+        if (bgOn != null) bgOn.recycle();
+        if (bgOff != null) bgOff.recycle();
+        bgOn = null;
+        bgOff = null;
+        bgOn = decodeBg(R.drawable.bg_on, CustomImages.BG_ON);
+        boolean off = prefs().getBoolean(KeeperService.KEY_BLOCKED, false) && BlockService.isBlocking();
+        showingOff = off;
+        if (off) bgOff = decodeBg(R.drawable.bg_off, CustomImages.BG_OFF);
+        background.setImageBitmap(off ? bgOff : bgOn);
+        refresh();
+        sendBroadcast(new Intent(CustomImages.ACTION_CHANGED).setPackage(getPackageName()));
     }
 
     /** 开启常驻悬浮球：没权限先去系统授权页，回来后在 onResume 里挂上 */
@@ -215,7 +303,7 @@ public class MainActivity extends Activity {
 
         if (off != showingOff) {
             showingOff = off;
-            if (off && bgOff == null) bgOff = decodeBg(R.drawable.bg_off);
+            if (off && bgOff == null) bgOff = decodeBg(R.drawable.bg_off, CustomImages.BG_OFF);
             background.setImageBitmap(off ? bgOff : bgOn);
         }
 
@@ -271,6 +359,15 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        int kind = requestCode == REQ_PICK_BG_ON ? CustomImages.BG_ON
+                : requestCode == REQ_PICK_BG_OFF ? CustomImages.BG_OFF
+                : requestCode == REQ_PICK_LOGO ? CustomImages.LOGO : 0;
+        if (kind != 0) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                importImage(data.getData(), kind);
+            }
+            return;
+        }
         if (requestCode == REQ_VPN) {
             if (resultCode == RESULT_OK) {
                 status.post(() -> {

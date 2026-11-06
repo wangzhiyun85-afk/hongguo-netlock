@@ -3,6 +3,7 @@ package com.jingxuan.netlock;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.graphics.PixelFormat;
 import android.graphics.Point;
 import android.net.VpnService;
@@ -48,6 +49,9 @@ class FloatingBall {
     private boolean removing;
     private boolean blocked;
 
+    /** 自定义头像合成出来的位图（没设置自定义图时为 null，直接用内置图） */
+    private Bitmap image;
+
     FloatingBall(Context context, Runnable onLost) {
         this.context = context.getApplicationContext();
         this.onLost = onLost;
@@ -65,7 +69,7 @@ class FloatingBall {
 
         view = new ImageView(this.context);
         view.setAlpha(0.5f);
-        view.setImageResource(R.drawable.ball_on);
+        applyImage();
         // 被系统悄悄摘掉窗口（切 VPN、清理悬浮窗等）时通知服务重建
         view.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
             @Override
@@ -159,7 +163,25 @@ class FloatingBall {
 
     void setBlocked(boolean on) {
         blocked = on;
-        view.setImageResource(on ? R.drawable.ball_off : R.drawable.ball_on);
+        applyImage();
+    }
+
+    /** 主界面换过自定义头像后调用，重新合成一次 */
+    void reloadImage() {
+        applyImage();
+    }
+
+    /** 有自定义头像就用「圆形头像 + 状态描边」，没有就用内置的绿/红图标 */
+    private void applyImage() {
+        Bitmap custom = CustomImages.ballBitmap(context, size, blocked);
+        Bitmap old = image;
+        image = custom;
+        if (custom != null) {
+            view.setImageBitmap(custom);
+        } else {
+            view.setImageResource(blocked ? R.drawable.ball_off : R.drawable.ball_on);
+        }
+        if (old != null && old != custom) old.recycle();
     }
 
     private void toggle() {

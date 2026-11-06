@@ -98,6 +98,11 @@ public class KeeperService extends Service {
                 setBlocked(intent.getBooleanExtra(EXTRA_BLOCKED, false));
                 return;
             }
+            if (CustomImages.ACTION_CHANGED.equals(intent.getAction())) {
+                // 主界面换过自定义头像：就地刷新悬浮球，不重建窗口
+                if (ball != null) ball.reloadImage();
+                return;
+            }
             syncUi(false);
         }
     };
@@ -347,6 +352,7 @@ public class KeeperService extends Service {
     private void registerStateReceiver() {
         IntentFilter filter = new IntentFilter(ACTION_STATE);
         filter.addAction(ACTION_BALL_TOGGLE);
+        filter.addAction(CustomImages.ACTION_CHANGED);
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(stateReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
