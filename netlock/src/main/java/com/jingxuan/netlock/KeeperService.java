@@ -302,12 +302,6 @@ public class KeeperService extends Service {
         PendingIntent toggle = PendingIntent.getForegroundService(this, 1,
                 new Intent(this, KeeperService.class).setAction(ACTION_TOGGLE),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        // 不用常驻的备选方案：一键跳到系统自带的按应用断网页
-        PendingIntent netControl = PendingIntent.getActivity(this, 3,
-                new Intent(this, MainActivity.class)
-                        .putExtra(MainActivity.EXTRA_OPEN_NET, true)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP),
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         PendingIntent exit = PendingIntent.getService(this, 2,
                 new Intent(this, KeeperService.class).setAction(ACTION_EXIT),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
@@ -322,7 +316,6 @@ public class KeeperService extends Service {
                 .setShowWhen(false)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .addAction(new Notification.Action.Builder(0, blocked ? "恢复联网" : "断网红果", toggle).build())
-                .addAction(new Notification.Action.Builder(0, "系统联网控制", netControl).build())
                 .addAction(new Notification.Action.Builder(0, "退出常驻", exit).build());
         if (Build.VERSION.SDK_INT >= 31) {
             nb.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);

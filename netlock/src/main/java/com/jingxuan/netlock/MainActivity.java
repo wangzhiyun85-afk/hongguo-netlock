@@ -32,9 +32,6 @@ import android.widget.Toast;
  */
 public class MainActivity extends Activity {
 
-    public static final String EXTRA_OPEN_NET = "open_net_settings";
-
-    private static final String TARGET_PKG = "com.phoenix.read";
     private static final int REQ_VPN = 1;
     private static final int REQ_NOTIFY = 2;
     private static final int REQ_PICK_BG_ON = 11;
@@ -68,21 +65,6 @@ public class MainActivity extends Activity {
         registerStateReceiver();
         requestNotificationPermission();
         startKeeper();
-        openNetSettingsIfRequested(getIntent());
-    }
-
-    @Override
-    protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        openNetSettingsIfRequested(intent);
-    }
-
-    /** 通知栏「系统联网控制」按钮直接跳过来时，落地即打开系统页面 */
-    private void openNetSettingsIfRequested(Intent intent) {
-        if (intent == null || !intent.getBooleanExtra(EXTRA_OPEN_NET, false)) return;
-        intent.removeExtra(EXTRA_OPEN_NET);
-        status.postDelayed(this::openSystemNetworkSettings, 300);
     }
 
     @Override
@@ -150,10 +132,6 @@ public class MainActivity extends Activity {
         links.setOrientation(LinearLayout.HORIZONTAL);
         links.setGravity(Gravity.CENTER);
         links.setPadding(0, dp(12), 0, 0);
-
-        TextView netLink = link("系统联网控制");
-        netLink.setOnClickListener(v -> openSystemNetworkSettings());
-        links.addView(netLink);
 
         TextView exitLink = link("退出常驻");
         exitLink.setPadding(dp(22), 0, 0, 0);
@@ -402,28 +380,6 @@ public class MainActivity extends Activity {
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
         }
-    }
-
-    /**
-     * 跳到系统自带的「按应用断网」页。
-     * 依次尝试：流量使用情况 → 红果的应用详情 → 无线设置（不同 ColorOS 版本入口位置不一样）。
-     */
-    private void openSystemNetworkSettings() {
-        Intent[] chain = new Intent[]{
-                new Intent(Settings.ACTION_DATA_USAGE_SETTINGS),
-                new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + TARGET_PKG)),
-                new Intent(Settings.ACTION_WIRELESS_SETTINGS)
-        };
-        for (Intent i : chain) {
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try {
-                startActivity(i);
-                Toast.makeText(this, "找到「红果短剧」，把「移动数据」和「WLAN」都关掉", Toast.LENGTH_LONG).show();
-                return;
-            } catch (Exception ignored) {
-            }
-        }
-        Toast.makeText(this, "没找到系统联网设置，请在系统设置里搜索「联网」", Toast.LENGTH_LONG).show();
     }
 
     private void registerStateReceiver() {
