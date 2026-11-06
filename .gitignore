@@ -1,0 +1,18 @@
+# Gradle / Android 构建产物
+.gradle/
+build/
+*/build/
+local.properties
+captures/
+
+# 打包出来的 APK 只作本机分发，不进仓库
+apk/*.apk
+d:/
+
+# 签名文件（含密码，公开仓库不要传）
+apk/*.keystore
+
+# IDE / 系统
+.idea/
+*.iml
+.DS_Store
